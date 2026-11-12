@@ -1,5 +1,15 @@
 import java.util.Scanner;
 
+interface Bookable {
+    void book();
+    void cancel();
+    boolean isBooked();
+}
+
+interface Discountable {
+    int applyDiscount(int price);
+}
+
 class Movie {
     private String title;
     private String genre;
@@ -28,7 +38,7 @@ class Movie {
     }
 }
 
-class Seat {
+abstract class Seat implements Bookable {
     private char row;
     private int number;
     private boolean booked;
@@ -55,23 +65,34 @@ class Seat {
         return "" + row + number;
     }
 
-    public int getPrice() {
-        return 180;
-    }
-
-    public char getSymbol() {
-        if (booked) {
-            return 'X';
-        }
-        return 'O';
-    }
-
     public void book() {
         booked = true;
     }
 
     public void cancel() {
         booked = false;
+    }
+
+    public abstract int getPrice();
+    public abstract char getSymbol();
+}
+
+class RegularSeat extends Seat {
+    public RegularSeat(char row, int number) {
+        super(row, number);
+    }
+
+    @Override
+    public int getPrice() {
+        return 180;
+    }
+
+    @Override
+    public char getSymbol() {
+        if (isBooked()) {
+            return 'X';
+        }
+        return 'O';
     }
 }
 
@@ -109,7 +130,7 @@ class Showtime {
                 if (r == rows - 1) {
                     seats[r][c] = new VipSeat(rowLetter, c + 1);
                 } else {
-                    seats[r][c] = new Seat(rowLetter, c + 1);
+                    seats[r][c] = new RegularSeat(rowLetter, c + 1);
                 }
             }
         }
@@ -184,10 +205,12 @@ class Showtime {
 class Ticket {
     private Showtime showtime;
     private Seat seat;
+    private int pricePaid;
 
-    public Ticket(Showtime showtime, Seat seat) {
+    public Ticket(Showtime showtime, Seat seat, int pricePaid) {
         this.showtime = showtime;
         this.seat = seat;
+        this.pricePaid = pricePaid;
     }
 
     public Showtime getShowtime() {
@@ -198,13 +221,17 @@ class Ticket {
         return seat;
     }
 
+    public int getPricePaid() {
+        return pricePaid;
+    }
+
     public String toString() {
         return showtime.getMovie().getTitle() + " | " + showtime.getTime()
-                + " | Seat " + seat.getCode() + " | " + seat.getPrice() + " baht";
+                + " | Seat " + seat.getCode() + " | " + pricePaid + " baht";
     }
 }
 
-class Customer {
+class Customer implements Discountable {
     private String name;
     private int money;
     private Ticket[] tickets;
@@ -240,7 +267,7 @@ class Customer {
     public void addTicket(Ticket ticket) {
         tickets[ticketCount] = ticket;
         ticketCount++;
-        money = money - ticket.getSeat().getPrice();
+        money = money - ticket.getPricePaid();
     }
 
     public Ticket getTicket(int index) {
@@ -257,7 +284,7 @@ class Customer {
         }
         ticketCount--;
         tickets[ticketCount] = null;
-        money = money + removed.getSeat().getPrice();
+        money = money + removed.getPricePaid();
         return removed;
     }
 
@@ -269,6 +296,22 @@ class Customer {
         for (int i = 0; i < ticketCount; i++) {
             System.out.println((i + 1) + ") " + tickets[i]);
         }
+    }
+
+    @Override
+    public int applyDiscount(int price) {
+        return price;
+    }
+}
+
+class StudentCustomer extends Customer implements Discountable {
+    public StudentCustomer(String name, int money) {
+        super(name, money);
+    }
+
+    @Override
+    public int applyDiscount(int price) {
+        return price * 80 / 100;
     }
 }
 
@@ -337,8 +380,16 @@ public class CinemaBooking {
         if (name.isEmpty()) {
             name = "Guest";
         }
-        customer = new Customer(name, 1000);
-        System.out.println("Hello " + customer.getName() + "! You have " + customer.getMoney() + " baht.");
+        System.out.print("Are you a student? (y/n): ");
+        String answer = scanner.nextLine().trim().toLowerCase();
+        if (answer.equals("y")) {
+            customer = new StudentCustomer(name, 1000);
+            System.out.println("Hello " + customer.getName() + "! Student discount (20%) applied.");
+        } else {
+            customer = new Customer(name, 1000);
+            System.out.println("Hello " + customer.getName() + "!");
+        }
+        System.out.println("You have " + customer.getMoney() + " baht.");
 
         boolean running = true;
         while (running) {
@@ -408,16 +459,19 @@ public class CinemaBooking {
                 System.out.println("There is no seat called " + code + ".");
             } else if (seat.isBooked()) {
                 System.out.println("Seat " + seat.getCode() + " is already taken.");
-            } else if (!customer.canAfford(seat.getPrice())) {
-                System.out.println("Not enough money. You have " + customer.getMoney() + " baht.");
-            } else if (!customer.hasRoomForTicket()) {
-                System.out.println("You cannot hold any more tickets.");
             } else {
-                seat.book();
-                Ticket ticket = new Ticket(showtime, seat);
-                customer.addTicket(ticket);
-                System.out.println("Booked! " + ticket);
-                System.out.println("Money left: " + customer.getMoney() + " baht");
+                int price = customer.applyDiscount(seat.getPrice());
+                if (!customer.canAfford(price)) {
+                    System.out.println("Not enough money. You have " + customer.getMoney() + " baht.");
+                } else if (!customer.hasRoomForTicket()) {
+                    System.out.println("You cannot hold any more tickets.");
+                } else {
+                    seat.book();
+                    Ticket ticket = new Ticket(showtime, seat, price);
+                    customer.addTicket(ticket);
+                    System.out.println("Booked! " + ticket);
+                    System.out.println("Money left: " + customer.getMoney() + " baht");
+                }
             }
         }
     }
@@ -436,7 +490,7 @@ public class CinemaBooking {
         ticket.getSeat().cancel();
         customer.removeTicket(number - 1);
         System.out.println("Cancelled " + ticket);
-        System.out.println("Refunded " + ticket.getSeat().getPrice() + " baht. You have " + customer.getMoney() + " baht.");
+        System.out.println("Refunded " + ticket.getPricePaid() + " baht. You have " + customer.getMoney() + " baht.");
     }
 
     private static int readNumber(String prompt) {
