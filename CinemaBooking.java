@@ -507,3 +507,62 @@ public class CinemaBooking {
         return Integer.parseInt(text);
     }
 }
+
+class CinemaTest {
+    private static int passed = 0;
+    private static int total = 0;
+
+    public static void main(String[] args) {
+        Cinema cinema = new Cinema("Star Cinema");
+        Showtime horror = cinema.getShowtime(3);
+
+        Customer normal = new Customer("Ann", 1000);
+        Customer student = new StudentCustomer("Harley", 1000);
+        check("Normal customer pays full price", normal.applyDiscount(180) == 180);
+        check("Student gets 20% off", student.applyDiscount(180) == 144);
+
+        check("Regular seat costs 180", horror.findSeat("A1").getPrice() == 180);
+        check("VIP seat costs 300", horror.findSeat("E1").getPrice() == 300);
+
+        check("Seat Z9 does not exist", horror.findSeat("Z9") == null);
+        check("Seat A0 does not exist", horror.findSeat("A0") == null);
+        check("Seat A9 does not exist", horror.findSeat("A9") == null);
+        check("Small letters work (b4)", horror.findSeat("b4") != null);
+
+        check("C4 is already booked", horror.findSeat("C4").isBooked());
+        check("Showtime 5 does not exist", cinema.getShowtime(5) == null);
+
+        int freeBefore = horror.countFreeSeats();
+        Seat seat = horror.findSeat("D5");
+        int price = student.applyDiscount(seat.getPrice());
+        seat.book();
+        student.addTicket(new Ticket(horror, seat, price));
+        check("Booking D5 takes the seat", seat.isBooked());
+        check("Booking D5 costs 144", student.getMoney() == 856);
+        check("One less free seat", horror.countFreeSeats() == freeBefore - 1);
+        check("Customer has 1 ticket", student.getTicketCount() == 1);
+
+        Ticket ticket = student.getTicket(0);
+        ticket.getSeat().cancel();
+        student.removeTicket(0);
+        check("Cancel frees the seat", !seat.isBooked());
+        check("Cancel gives the money back", student.getMoney() == 1000);
+        check("Customer has 0 tickets", student.getTicketCount() == 0);
+
+        Customer poor = new Customer("Bob", 40);
+        check("40 baht is not enough for a seat", !poor.canAfford(180));
+
+        System.out.println();
+        System.out.println(passed + " / " + total + " tests passed");
+    }
+
+    private static void check(String name, boolean result) {
+        total++;
+        if (result) {
+            passed++;
+            System.out.println("PASS  " + name);
+        } else {
+            System.out.println("FAIL  " + name);
+        }
+    }
+}
